@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Turbo-signal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <h1>Turbo-signal</h1>
+    <h2>Effect log</h2>
+    <ol id="log"></ol>
+    <script type="module">
+      import { signal, computed } from './src/index.js';
+
+      const log = message =>
+        document
+          .querySelector('#log')
+          .insertAdjacentHTML('beforeend', `<li>${message}</li>`);
+
+      const counter1 = signal(1);
+      counter1.effect(() => log(`counter1 = ${counter1}`));
+      const counter2 = signal(2);
+      counter2.effect(() => log(`counter2 = ${counter2}`));
+      const counter = computed(() => counter1 + counter2);
+      counter.effect(() => log(`counter = ${counter}`));
+      const odd = computed(() => !!(counter & 1));
+      odd.effect(() => log(`odd = ${odd}`));
+      const parity = computed(() => (+odd ? 'odd' : 'even')); // +: force access via value getter
+      parity.effect(() => log(`parity = ${parity}`));
+      log(
+        `counter1=${counter1},counter2=${counter2},counter=${counter},odd=${odd},parity=${parity}`
+      );
+
+      counter1.value = 3;
+
+      counter1.value = 6;
+
+      counter2.value = 4;
+
+      counter1.value = 7;
+
+      counter1.value = 3;
+    </script>
+  </body>
+</html>
