@@ -8,19 +8,6 @@ let registeringComputedSignalDependencies;
 let registeredComputations = [];
 let registeredSignalIndices = [];
 
-let _this = new EventTarget();
-
-_this.addEventListener('c', ({ detail: _id }) => {
-  for (let thisEffect of effects[_id] || EMPTY_ARRAY) {
-    let type = typeof thisEffect;
-    if (type === 'function') {
-      thisEffect();
-    } else if (type === 'number') {
-      _update(thisEffect);
-    }
-  }
-});
-
 let _update = registeredComputationIndex => {
   let signalIndex = registeredSignalIndices[registeredComputationIndex];
   let newValue = registeredComputations[registeredComputationIndex]();
@@ -31,7 +18,14 @@ let _value = (index, newValue) => {
   let oldValue = values[index];
   if (oldValue !== newValue) {
     values[index] = newValue;
-    _this.dispatchEvent(new CustomEvent('c', { detail: index }));
+    for (let thisEffect of effects[index] || EMPTY_ARRAY) {
+      let type = typeof thisEffect;
+      if (type === 'function') {
+        thisEffect();
+      } else if (type === 'number') {
+        _update(thisEffect);
+      }
+    }
   }
   return newValue;
 };
@@ -100,6 +94,6 @@ export let computed = callback => {
   registeredComputations[index] = callback;
   registeredSignalIndices[index] = id + 1;
   let _signal = signal( /* fills registeringComputedSignalDependencies */ callback());
-  registeringComputedSignalDependencies = false;
+  registeringComputedSignalDependencies = EMPTY_ARRAY;
   return _signal;
 };
