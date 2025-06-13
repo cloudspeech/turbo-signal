@@ -94,6 +94,6 @@ export let computed = callback => {
   registeredComputations[index] = callback;
   registeredSignalIndices[index] = id + 1;
   let _signal = signal( /* fills registeringComputedSignalDependencies */ callback());
-  registeringComputedSignalDependencies = EMPTY_ARRAY;
+  registeringComputedSignalDependencies = null;
   return _signal;
 };
