@@ -1,118 +1,105 @@
-let EMPTY = [];
+let EMPTY_ARRAY = [];
 
-class TurboSignal extends EventTarget {
-  static #values = [];
-  static #lastSignalIndex = 0;
-  static #lastComputationIndex = -1;
-  static #singleton;
-  static #effects = [];
-  static #registeringComputedSignalDependencies;
-  static #registeredComputations = [];
-  static #registeredSignalIndices = [];
+let values = [];
+let id = 0;
+let lastComputationIndex = -1;
+let effects = [];
+let registeringComputedSignalDependencies;
+let registeredComputations = [];
+let registeredSignalIndices = [];
 
-  static #update = registeredComputationIndex => {
-    let signalIndex =
-      TurboSignal.#registeredSignalIndices[registeredComputationIndex];
-    let newValue =
-      TurboSignal.#registeredComputations[registeredComputationIndex]();
-    TurboSignal.#value(signalIndex, newValue);
-  };
+let _this = new EventTarget();
 
+_this.addEventListener('c', ({ detail: _id }) => {
+  for (let thisEffect of effects[_id] || EMPTY_ARRAY) {
+    let type = typeof thisEffect;
+    if (type === 'function') {
+      thisEffect();
+    } else if (type === 'number') {
+      _update(thisEffect);
+    }
+  }
+});
+
+let _update = registeredComputationIndex => {
+  let signalIndex = registeredSignalIndices[registeredComputationIndex];
+  let newValue = registeredComputations[registeredComputationIndex]();
+  _value(signalIndex, newValue);
+};
+
+let _value = (index, newValue) => {
+  let oldValue = values[index];
+  if (oldValue !== newValue) {
+    values[index] = newValue;
+    _this.dispatchEvent(new CustomEvent('c', { detail: index }));
+  }
+  return newValue;
+};
+
+let _effect = (index, callback, initial) => {
+  if (initial) callback();
+  let callbacks = (effects[index] = effects[index] || []);
+  let callbackIndex = callbacks.length;
+  callbacks[callbackIndex] = callback;
+  return [index, callbackIndex];
+};
+
+export let uneffect = ([index, callbackIndex]) => {
+  effects[index][callbackIndex] = null;
+};
+
+class Signal {
   #id;
 
-  constructor(initialValue) {
-    super();
-
-    this.#id = ++TurboSignal.#lastSignalIndex;
-
-    if (!TurboSignal.#singleton) {
-      TurboSignal.#singleton = this;
-      this.addEventListener('change', ({ detail: id }) => {
-        let effects = TurboSignal.#effects[id] || EMPTY;
-        for (let effect of effects) {
-          let type = typeof effect;
-          if (type === 'function') {
-            effect();
-          } else if (type === 'number') {
-            TurboSignal.#update(effect);
-          }
-        }
-      });
-    }
-
-    let dependencies =
-      TurboSignal.#registeringComputedSignalDependencies || EMPTY;
-
-    for (let dependencyId; (dependencyId = dependencies.shift()); ) {
-      if (!TurboSignal.#effects[dependencyId]) {
-        TurboSignal.#effects[dependencyId] = [];
-      }
-      let dependencyEffects = TurboSignal.#effects[dependencyId];
-      dependencyEffects.push(TurboSignal.#lastComputationIndex);
-    }
-
-    this.value = initialValue;
+  constructor() {
+    this.#id = ++id;
   }
 
   get value() {
     let index = this.#id;
-    let dependencies = TurboSignal.#registeringComputedSignalDependencies;
+    let dependencies = registeringComputedSignalDependencies;
     if (dependencies?.indexOf(index) < 0) {
       dependencies.push(index);
       dependencies.sort();
     }
-    return TurboSignal.#values[index];
-  }
-
-  valueOf() {
-    return this.value;
-  }
-
-  toString() {
-    return String(this.value);
-  }
-
-  static #value(index, newValue) {
-    let oldValue = TurboSignal.#values[index];
-    if (oldValue !== newValue) {
-      TurboSignal.#values[index] = newValue;
-      TurboSignal.#singleton.dispatchEvent(
-        new CustomEvent('change', { detail: index })
-      );
-    }
-    return newValue;
+    return values[index];
   }
 
   set value(newValue) {
-    return TurboSignal.#value(this.#id, newValue);
+    return _value(this.#id, newValue);
   }
 
-  effect(callback, initial) {
-    let index = this.#id;
-    if (initial) callback();
-    let callbacks = (TurboSignal.#effects[index] =
-      TurboSignal.#effects[index] || []);
-    let callbackIndex = callbacks.length;
-    callbacks[callbackIndex] = callback;
-    return [index, callbackIndex];
-  }
+  valueOf = () => this.value;
 
-  static uneffect([index, callbackIndex]) {
-    TurboSignal.#effects[index][callbackIndex] = null;
-  }
+  toString = () => String(this.value);
 
-  static computed(callback) {
-    TurboSignal.#registeringComputedSignalDependencies = [];
-    let index = ++TurboSignal.#lastComputationIndex;
-    TurboSignal.#registeredComputations[index] = callback;
-    TurboSignal.#registeredSignalIndices[index] =
-      TurboSignal.#lastSignalIndex + 1;
-    let value = callback(); // fills TurboSignal.#registeringComputedSignalDependencies
-    let signal = new TurboSignal(value);
-    TurboSignal.#registeringComputedSignalDependencies = null;
-    return signal;
-  }
+  effect = callback => _effect(this.#id, callback);
 }
 
-export const signal = value => new TurboSignal(value);
-export const computed = callback => TurboSignal.computed(callback);
+export let signal = value => {
+  let _signal = new Signal();
+
+  let dependencies = registeringComputedSignalDependencies || EMPTY_ARRAY;
+
+  for (let dependencyId; (dependencyId = dependencies.shift()); ) {
+    if (!effects[dependencyId]) {
+      effects[dependencyId] = [];
+    }
+    let dependencyEffects = effects[dependencyId];
+    dependencyEffects.push(lastComputationIndex);
+  }
+
+  _signal.value = value;
+
+  return _signal;
+};
+
+export let computed = callback => {
+  registeringComputedSignalDependencies = [];
+  let index = ++lastComputationIndex;
+  registeredComputations[index] = callback;
+  registeredSignalIndices[index] = id + 1;
+  let _signal = signal( /* fills registeringComputedSignalDependencies */ callback());
+  registeringComputedSignalDependencies = false;
+  return _signal;
+};
