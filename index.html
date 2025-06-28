@@ -40,6 +40,14 @@
       counter1.value = 7;
 
       counter1.value = 3;
+
+      window.bigValue = signal(new ArrayBuffer(100_000_000)); // a 100MB signal value referenced by an always-present global object
+      const forceGC = obj => (obj.bigValue = null);
+      setTimeout(forceGC, 60 * 1000, window); // delete the signal after 1 minute
+      // In Chrome DevTools, go to the Memory tab and create a new heap snapshot.
+      // Observe 100MB object being listed.
+      // After > 1 min, click the sweep icon in that tab to garbage-collect, and create another heap snapshot.
+      // Observe 100MB object is gone!
     </script>
   </body>
 </html>

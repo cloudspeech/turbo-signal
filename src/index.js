@@ -7,6 +7,7 @@ let effects = [];
 let registeringComputedSignalDependencies;
 let registeredComputations = [];
 let registeredSignalIndices = [];
+let registry = new FinalizationRegistry(id => (values[id] = null));
 
 let _update = registeredComputationIndex => {
   let signalIndex = registeredSignalIndices[registeredComputationIndex];
@@ -47,6 +48,7 @@ class Signal {
 
   constructor() {
     this.#id = ++id;
+    registry.register(this, id);
   }
 
   get value() {
